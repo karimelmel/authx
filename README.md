@@ -1,9 +1,9 @@
 # Authentication for multi-tenant SaaS
 
-Example of multi-tenant application 
+Example of multi-tenant application supporting both Microsoft Entra ID and Google Cloud Identity.
 
 # Components
-A multi-tenant application that is configured in one tenant. Each client must add the client to its tenant, either through using the OAuth Consent Flow natively in Entra ID, or through installing the application manually.
+A multi-tenant application that is configured in one tenant. Each client must add the client to its tenant, either through using the OAuth Consent Flow natively in Entra ID/Google Cloud, or through installing the application manually.
 
 The multi-tenant application will be provided as a Verified Application.
 
@@ -45,6 +45,8 @@ The backend application can validate the claims of each user:
 ```
 
 ## Authentication Flow
+
+### Microsoft Entra ID
 
 If application has not been consented (requires global admin):
 
@@ -109,7 +111,44 @@ sequenceDiagram
     App->>User: Return protected content
 ```
 
-## Manually installing the application
+### Google Cloud Identity
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant App as AuthX App
+    participant Google as Google Cloud Identity
+    
+    User->>App: Access application
+    App->>User: Display login page
+    User->>App: Click "Login with Google"
+    App->>App: Generate state parameter
+    App->>App: Store state in session
+    App->>Google: Redirect to Google authorization endpoint
+    Note over App,Google: OAuth2 authorization request with scopes
+    Google->>User: Present login page
+    User->>Google: Enter credentials
+    Google->>User: Display consent screen (first time only)
+    User->>Google: Grant consent
+    Google->>App: Redirect back with authorization code
+    Note over Google,App: Includes state parameter
+    App->>App: Verify state parameter
+    App->>Google: Exchange code for tokens
+    Google->>App: Return ID token, access token
+    App->>App: Verify ID token
+    App->>App: Extract user information (email, etc.)
+    App->>App: Store user in session
+    App->>User: Redirect to homepage
+    User->>App: Request protected resource
+    App->>App: Check session for authenticated user
+    App->>User: Return protected content
+```
+
+## Identity Provider Setup
+
+### Microsoft Entra ID
+
+#### Manually installing the application
 
 Register the multi-tenant application in your tenant:
 
@@ -120,7 +159,7 @@ az rest --method POST \
   --body '{"appId": "e44dca09-36d1-4eb3-8a36-f61cf9a3f420"}'
 ```
 
-Find the client id for your Microsoft Graph application, this is unqiue to each tenant:
+Find the client id for your Microsoft Graph application, this is unique to each tenant:
 ```bash
 az rest --method GET \
   --uri "https://graph.microsoft.com/v1.0/servicePrincipals?\$filter=appId eq '00000003-0000-0000-c000-000000000000'" \
@@ -140,4 +179,29 @@ az rest --method POST \
     "scope": "User.Read"
   }'
 ```
+
+### Google Cloud Identity
+
+To set up Google Cloud Identity for the application:
+
+1. Go to the Google Cloud Console
+2. Navigate to APIs & Services > Credentials
+3. Create an OAuth client ID
+4. Configure the authorized redirect URIs
+5. Note your client ID and client secret
+
+Configure your application with the Google OAuth 2.0 endpoints:
+- Authorization endpoint: https://accounts.google.com/o/oauth2/v2/auth
+- Token endpoint: https://oauth2.googleapis.com/token
+- Required scopes: openid email profile
+
+## Claims Comparison
+
+| Information | Microsoft Entra ID | Google Cloud Identity |
+|-------------|-------------------|----------------------|
+| User ID     | "sub" claim       | "sub" claim          |
+| Email       | "email" claim     | "email" claim        |
+| Name        | "name" claim      | "name" claim         |
+| Username    | "preferred_username" | "email" claim     |
+| Tenant ID   | "tid" claim       | N/A                  |
 
